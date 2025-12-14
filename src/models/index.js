@@ -4,13 +4,13 @@
 
 const { sequelize } = require('../config/database');
 
-// Import models
 const Admin = require('./Admin')(sequelize);
+const WhatsAppSession = require('./WhatsAppSession')(sequelize);
 
-// Export models & sequelize
 const db = {
   sequelize,
-  Admin
+  Admin,
+  WhatsAppSession
 };
 
 module.exports = db;
