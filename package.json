@@ -1,7 +1,7 @@
 {
   "name": "whatsapp-telegram-bot",
   "version": "1.0.0",
-  "description": "Base project for WhatsApp & Telegram Bot",
+  "description": "Telegram Bot connected to WhatsApp Web (Linked Device)",
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js"
@@ -13,6 +13,9 @@
   "license": "MIT",
   "dependencies": {
     "express": "^4.19.2",
-    "dotenv": "^16.4.5"
+    "dotenv": "^16.4.5",
+    "node-telegram-bot-api": "^0.66.0",
+    "whatsapp-web.js": "^1.26.0",
+    "qrcode": "^1.5.4"
   }
 }
