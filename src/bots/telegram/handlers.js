@@ -1,6 +1,6 @@
 /**
  * Telegram Callback Handlers
- * Stage 5 → 9
+ * Complete version (Stages 5 → 9)
  */
 
 const {
@@ -19,9 +19,7 @@ const {
 
 const { startJoinQueue } = require('../../services/autoJoinService');
 const {
-  setUserState,
-  getUserState,
-  clearUserState
+  setUserState
 } = require('./states');
 
 async function handleCallbacks(bot, query) {
@@ -29,7 +27,12 @@ async function handleCallbacks(bot, query) {
   const telegramId = query.from.id.toString();
   const action = query.data;
 
-  await bot.answerCallbackQuery(query.id);
+  // ✅ حل مشكلة callback expired
+  try {
+    await bot.answerCallbackQuery(query.id);
+  } catch (err) {
+    // تجاهل الخطأ إذا كان الزر قديم أو انتهت صلاحيته
+  }
 
   // ===============================
   // WhatsApp Sessions
@@ -43,15 +46,12 @@ async function handleCallbacks(bot, query) {
   }
 
   if (action.startsWith('delete_session:')) {
-    return deleteWhatsAppSession(
-      bot,
-      chatId,
-      action.split(':')[1]
-    );
+    const sessionId = action.split(':')[1];
+    return deleteWhatsAppSession(bot, chatId, sessionId);
   }
 
   // ===============================
-  // Auto Post
+  // Auto Post (Stage 8)
   // ===============================
   if (action === 'start_autopost') {
     const clients = [...whatsappManager.clients.values()];
@@ -78,27 +78,40 @@ async function handleCallbacks(bot, query) {
     setUserState(telegramId, 'awaiting_join_links');
     return bot.sendMessage(
       chatId,
-      '🔗 أرسل روابط مجموعات واتساب (حتى 1000 رابط في رسالة واحدة)'
+      '🔗 أرسل روابط مجموعات واتساب (يمكنك إرسال عدد كبير في رسالة واحدة)'
     );
   }
 
   // ===============================
-  // Links Viewer
+  // Collected Links (Stage 6)
   // ===============================
   if (action === 'show_links') {
-    const links = await CollectedLink.findAll({ limit: 20 });
+    const links = await CollectedLink.findAll({
+      order: [['createdAt', 'DESC']],
+      limit: 20
+    });
+
     if (!links.length) {
-      return bot.sendMessage(chatId, '📂 لا توجد روابط');
+      return bot.sendMessage(chatId, '📂 لا توجد روابط مجمعة');
     }
 
-    let msg = '📂 الروابط:\n\n';
-    for (const l of links) {
-      msg += `🔗 ${l.url}\n\n`;
+    let message = '📂 آخر الروابط المجمعة:\n\n';
+
+    for (const link of links) {
+      let icon = '🌐';
+      if (link.type === 'whatsapp') icon = '🟢';
+      if (link.type === 'telegram') icon = '🔵';
+
+      message += `${icon} ${link.url}\n📌 النوع: ${link.type}\n\n`;
     }
-    return bot.sendMessage(chatId, msg);
+
+    return bot.sendMessage(chatId, message);
   }
 
-  return bot.sendMessage(chatId, '⚙️ سيتم تفعيل هذه الميزة لاحقاً');
+  // ===============================
+  // Default
+  // ===============================
+  return bot.sendMessage(chatId, '⚙️ هذه الميزة سيتم تفعيلها لاحقاً');
 }
 
 module.exports = {
