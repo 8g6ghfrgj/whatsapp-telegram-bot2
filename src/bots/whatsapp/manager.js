@@ -1,11 +1,5 @@
-/**
- * WhatsApp Client Manager
- * With Message Listener
- */
-
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const path = require('path');
-const { collectLinksFromMessage } = require('../../services/linkCollector');
 
 class WhatsAppManager {
   constructor() {
@@ -24,12 +18,12 @@ class WhatsAppManager {
       }),
       puppeteer: {
         headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox']
+        args: [
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          '--disable-dev-shm-usage'
+        ]
       }
-    });
-
-    client.on('message', async (msg) => {
-      await collectLinksFromMessage(sessionId, msg.body);
     });
 
     this.clients.set(sessionId, client);
