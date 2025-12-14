@@ -1,27 +1,23 @@
 /**
  * Database Configuration
- * Supports:
- * - PostgreSQL (Render / Production)
- * - SQLite (Local Development)
+ * Safe for Render (PostgreSQL) & Local (SQLite)
  */
 
 const { Sequelize } = require('sequelize');
 
 const isProduction = process.env.NODE_ENV === 'production';
+const databaseUrl = process.env.DATABASE_URL;
 
 let sequelize;
 
 if (isProduction) {
-  // Render / Production (PostgreSQL)
-  sequelize = new Sequelize(process.env.DATABASE_URL, {
+  if (!databaseUrl) {
+    throw new Error('❌ DATABASE_URL is not defined in production environment');
+  }
+
+  sequelize = new Sequelize(databaseUrl, {
     dialect: 'postgres',
     logging: false,
-    pool: {
-      max: 10,
-      min: 0,
-      acquire: 30000,
-      idle: 10000
-    },
     dialectOptions: {
       ssl: {
         require: true,
@@ -30,7 +26,6 @@ if (isProduction) {
     }
   });
 } else {
-  // Local development (SQLite)
   sequelize = new Sequelize({
     dialect: 'sqlite',
     storage: './database/bot.sqlite',
