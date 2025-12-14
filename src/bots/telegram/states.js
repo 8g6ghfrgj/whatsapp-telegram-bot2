@@ -1,5 +1,5 @@
 /**
- * User States (Finite State Machine)
+ * User States (FSM)
  */
 
 const userStates = new Map();
