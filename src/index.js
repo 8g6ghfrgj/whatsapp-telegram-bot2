@@ -1,12 +1,13 @@
 /**
  * Application Entry Point
- * Stage 1: Base Express Server
- * No Telegram - No WhatsApp
+ * Stage 1 + Stage 2
  */
 
 require('dotenv').config();
 
 const { startServer } = require('./web/server');
+const { connectDatabase } = require('./config/database');
+const db = require('./models');
 
 const PORT = process.env.PORT || 3000;
 
@@ -15,6 +16,15 @@ async function bootstrap() {
     console.log('🚀 Starting application...');
     console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
 
+    // Connect database
+    await connectDatabase();
+
+    // Sync database models
+    await db.sequelize.sync();
+
+    console.log('📦 Database synced successfully');
+
+    // Start Express server
     await startServer(PORT);
 
     console.log('✅ Application started successfully');
