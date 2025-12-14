@@ -1,6 +1,6 @@
 /**
  * Telegram Callback Handlers
- * Stage 5 + Stage 6
+ * Stage 5 + 6 + 7
  */
 
 const {
@@ -9,14 +9,24 @@ const {
   deleteWhatsAppSession
 } = require('../whatsapp/session');
 
-const { CollectedLink } = require('../../models');
+const { CollectedLink, Advertisement } = require('../../models');
+const {
+  createAd,
+  listAds,
+  deleteAd
+} = require('../../services/adsService');
+
+const {
+  setUserState,
+  getUserState,
+  clearUserState
+} = require('./states');
 
 async function handleCallbacks(bot, query) {
   const chatId = query.message.chat.id;
   const telegramId = query.from.id.toString();
   const action = query.data;
 
-  // تأكيد الضغط على الزر
   await bot.answerCallbackQuery(query.id);
 
   // ===============================
@@ -36,7 +46,7 @@ async function handleCallbacks(bot, query) {
   }
 
   // ===============================
-  // Links (Stage 6)
+  // Links
   // ===============================
   if (action === 'show_links') {
     const links = await CollectedLink.findAll({
@@ -49,40 +59,62 @@ async function handleCallbacks(bot, query) {
     }
 
     let message = '📂 آخر الروابط المجمعة:\n\n';
-
     for (const link of links) {
-      let icon = '🌐';
-      if (link.type === 'whatsapp') icon = '🟢';
-      if (link.type === 'telegram') icon = '🔵';
-
-      message += `${icon} ${link.url}\n📌 النوع: ${link.type}\n\n`;
+      message += `🔗 ${link.url}\n📌 النوع: ${link.type}\n\n`;
     }
 
     return bot.sendMessage(chatId, message);
   }
 
   // ===============================
-  // Placeholder for next stages
+  // Advertisements (Stage 7)
   // ===============================
-  switch (action) {
-    case 'start_autopost':
-      return bot.sendMessage(chatId, '📢 سيتم تفعيله لاحقاً');
-
-    case 'stop_autopost':
-      return bot.sendMessage(chatId, '⛔ سيتم تفعيله لاحقاً');
-
-    case 'join_groups':
-      return bot.sendMessage(chatId, '👥 سيتم تفعيله لاحقاً');
-
-    case 'groups_report':
-      return bot.sendMessage(chatId, '📊 سيتم تفعيله لاحقاً');
-
-    case 'collect_links':
-      return bot.sendMessage(chatId, '🔍 يتم التجميع تلقائياً من واتساب');
-
-    default:
-      return bot.sendMessage(chatId, '❓ أمر غير معروف');
+  if (action === 'add_ad') {
+    setUserState(telegramId, 'awaiting_ad_content');
+    return bot.sendMessage(
+      chatId,
+      '📝 أرسل الآن الإعلان (نص / صورة / فيديو / جهة اتصال)'
+    );
   }
+
+  if (action === 'list_ads') {
+    const ads = await listAds(telegramId);
+
+    if (!ads.length) {
+      return bot.sendMessage(chatId, '📢 لا توجد إعلانات محفوظة');
+    }
+
+    for (const ad of ads) {
+      await bot.sendMessage(
+        chatId,
+        `📢 إعلان #${ad.id}\n📌 النوع: ${ad.type}`,
+        {
+          reply_markup: {
+            inline_keyboard: [
+              [
+                {
+                  text: '❌ حذف الإعلان',
+                  callback_data: `delete_ad:${ad.id}`
+                }
+              ]
+            ]
+          }
+        );
+      }
+    }
+    return;
+  }
+
+  if (action.startsWith('delete_ad:')) {
+    const adId = action.split(':')[1];
+    await deleteAd(adId, telegramId);
+    return bot.sendMessage(chatId, '🗑️ تم حذف الإعلان');
+  }
+
+  // ===============================
+  // Placeholder
+  // ===============================
+  return bot.sendMessage(chatId, '⚙️ سيتم تفعيل هذه الميزة لاحقاً');
 }
 
 module.exports = {
