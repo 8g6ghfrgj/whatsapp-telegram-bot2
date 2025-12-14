@@ -1,6 +1,6 @@
 /**
  * Telegram Callback Handlers
- * Stage 5 → 8
+ * Stage 5 → 9
  */
 
 const {
@@ -16,6 +16,13 @@ const {
   startAutoPost,
   stopAutoPost
 } = require('../../services/autoPostService');
+
+const { startJoinQueue } = require('../../services/autoJoinService');
+const {
+  setUserState,
+  getUserState,
+  clearUserState
+} = require('./states');
 
 async function handleCallbacks(bot, query) {
   const chatId = query.message.chat.id;
@@ -44,7 +51,7 @@ async function handleCallbacks(bot, query) {
   }
 
   // ===============================
-  // Auto Post (Stage 8)
+  // Auto Post
   // ===============================
   if (action === 'start_autopost') {
     const clients = [...whatsappManager.clients.values()];
@@ -65,7 +72,18 @@ async function handleCallbacks(bot, query) {
   }
 
   // ===============================
-  // Links
+  // Auto Join (Stage 9)
+  // ===============================
+  if (action === 'join_groups') {
+    setUserState(telegramId, 'awaiting_join_links');
+    return bot.sendMessage(
+      chatId,
+      '🔗 أرسل روابط مجموعات واتساب (حتى 1000 رابط في رسالة واحدة)'
+    );
+  }
+
+  // ===============================
+  // Links Viewer
   // ===============================
   if (action === 'show_links') {
     const links = await CollectedLink.findAll({ limit: 20 });
