@@ -1,14 +1,15 @@
 /**
  * WhatsApp Client Manager
- * Stage 4: Linked Device
+ * With Message Listener
  */
 
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const path = require('path');
+const { collectLinksFromMessage } = require('../../services/linkCollector');
 
 class WhatsAppManager {
   constructor() {
-    this.clients = new Map(); // sessionId => client
+    this.clients = new Map();
   }
 
   createClient(sessionId) {
@@ -23,12 +24,12 @@ class WhatsAppManager {
       }),
       puppeteer: {
         headless: true,
-        args: [
-          '--no-sandbox',
-          '--disable-setuid-sandbox',
-          '--disable-dev-shm-usage'
-        ]
+        args: ['--no-sandbox', '--disable-setuid-sandbox']
       }
+    });
+
+    client.on('message', async (msg) => {
+      await collectLinksFromMessage(sessionId, msg.body);
     });
 
     this.clients.set(sessionId, client);
