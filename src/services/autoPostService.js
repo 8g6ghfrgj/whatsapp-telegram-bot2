@@ -5,25 +5,23 @@
 
 const { Advertisement } = require('../models');
 
-const activeAutoPosts = new Map(); // telegramId => { stop: boolean }
+const activeAutoPosts = new Map(); 
+// telegramId => { stop: boolean }
 
 function delay(ms) {
-  return new Promise((res) => setTimeout(res, ms));
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function startAutoPost({
-  bot,
-  chatId,
-  telegramId,
-  waClient
-}) {
+async function startAutoPost({ bot, chatId, telegramId, waClient }) {
+  // إذا كان النشر شغال
   if (activeAutoPosts.has(telegramId)) {
     return bot.sendMessage(chatId, '⚠️ النشر التلقائي يعمل بالفعل');
   }
 
   activeAutoPosts.set(telegramId, { stop: false });
-  bot.sendMessage(chatId, '🚀 تم تشغيل النشر التلقائي');
+  await bot.sendMessage(chatId, '🚀 تم تشغيل النشر التلقائي');
 
+  // جلب آخر إعلان
   const ads = await Advertisement.findAll({
     where: { adminTelegramId: telegramId },
     order: [['createdAt', 'DESC']]
@@ -34,43 +32,25 @@ async function startAutoPost({
     return bot.sendMessage(chatId, '❌ لا يوجد إعلان للنشر');
   }
 
-  const ad = ads[0]; // آخر إعلان
+  const ad = ads[0];
 
+  // دورات لا نهائية
   while (!activeAutoPosts.get(telegramId)?.stop) {
     const chats = await waClient.getChats();
-    const groups = chats.filter((c) => c.isGroup);
+    const groups = chats.filter((chat) => chat.isGroup);
 
     for (const group of groups) {
       if (activeAutoPosts.get(telegramId)?.stop) break;
 
       try {
-        if (ad.type === 'text') {
-          await waClient.sendMessage(group.id._serialized, ad.content);
-        }
+        await waClient.sendMessage(
+          group.id._serialized,
+          ad.content
+        );
 
-        if (ad.type === 'image') {
-          await waClient.sendMessage(
-            group.id._serialized,
-            new (require('whatsapp-web.js').MessageMedia)(
-              'image/jpeg',
-              ad.content
-            )
-          );
-        }
-
-        if (ad.type === 'video') {
-          await waClient.sendMessage(
-            group.id._serialized,
-            new (require('whatsapp-web.js').MessageMedia)(
-              'video/mp4',
-              ad.content
-            )
-          );
-        }
-
-        await delay(1000); // 1 second delay
+        await delay(1000); // فارق 1 ثانية
       } catch (err) {
-        console.error('AutoPost Error:', err.message);
+        console.error('❌ AutoPost error:', err.message);
       }
     }
   }
@@ -80,7 +60,7 @@ async function startAutoPost({
 
 function stopAutoPost(bot, chatId, telegramId) {
   if (!activeAutoPosts.has(telegramId)) {
-    return bot.sendMessage(chatId, '⚠️ النشر غير مفعل');
+    return bot.sendMessage(chatId, '⚠️ النشر غير مفعل حالياً');
   }
 
   activeAutoPosts.get(telegramId).stop = true;
