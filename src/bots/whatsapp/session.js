@@ -1,45 +1,19 @@
-/**
- * WhatsApp Session Controller
- * Final Stable Version
- */
+const { createClient, destroyClient } = require('./manager');
+const { generateQR } = require('./qr');
+const accountService = require('../../services/whatsappAccountService');
+const { registerWhatsAppListeners } = require('./listeners');
 
-const crypto = require('crypto');
-const fs = require('fs');
-const path = require('path');
-const whatsappManager = require('./manager');
-const { generateQRImage } = require('./qr');
-const { WhatsAppSession } = require('../../models');
+let qrSent = false;
 
-async function createWhatsAppSession(bot, chatId, telegramId) {
-  // منع تكرار جلسة pending
-  const existing = await WhatsAppSession.findOne({
-    where: { adminTelegramId: telegramId, status: 'pending' }
-  });
-
-  if (existing) {
-    return bot.sendMessage(
-      chatId,
-      '⏳ لديك عملية ربط قيد التنفيذ.\nالرجاء إكمال الربط أو الانتظار.'
-    );
-  }
-
-  const sessionId = `wa_${crypto.randomBytes(6).toString('hex')}`;
-  const client = whatsappManager.createClient(sessionId);
-
-  let sessionCreated = false;
+async function startWhatsAppSession(bot, chatId) {
+  const client = createClient();
+  accountService.setPending();
 
   client.on('qr', async (qr) => {
-    // إنشاء الجلسة فقط عند ظهور QR فعليًا
-    if (!sessionCreated) {
-      await WhatsAppSession.create({
-        id: sessionId,
-        adminTelegramId: telegramId,
-        status: 'pending'
-      });
-      sessionCreated = true;
-    }
+    if (qrSent) return;
+    qrSent = true;
 
-    const qrImage = await generateQRImage(qr);
+    const qrImage = await generateQR(qr);
     await bot.sendPhoto(chatId, qrImage, {
       caption:
         '📱 امسح QR من واتساب\n' +
@@ -48,76 +22,31 @@ async function createWhatsAppSession(bot, chatId, telegramId) {
   });
 
   client.on('ready', async () => {
-    await WhatsAppSession.update(
-      { status: 'connected', connectedAt: new Date() },
-      { where: { id: sessionId } }
-    );
-
+    qrSent = false;
+    accountService.setConnected();
+    registerWhatsAppListeners(client);
     await bot.sendMessage(chatId, '✅ تم ربط حساب واتساب بنجاح');
   });
 
-  client.on('auth_failure', async () => {
-    await WhatsAppSession.destroy({ where: { id: sessionId } });
-    await bot.sendMessage(chatId, '❌ فشل ربط حساب واتساب');
-  });
-
   client.on('disconnected', async () => {
-    await WhatsAppSession.update(
-      { status: 'disconnected' },
-      { where: { id: sessionId } }
-    );
+    qrSent = false;
+    accountService.setDisconnected();
+    await bot.sendMessage(chatId, '⚠️ تم فصل حساب واتساب');
   });
 
-  await client.initialize();
-}
-
-async function listWhatsAppSessions(bot, chatId, telegramId) {
-  const sessions = await WhatsAppSession.findAll({
-    where: { adminTelegramId: telegramId }
-  });
-
-  if (!sessions.length) {
-    return bot.sendMessage(chatId, '📱 لا توجد حسابات مرتبطة');
-  }
-
-  for (const session of sessions) {
-    await bot.sendMessage(
-      chatId,
-      `📱 الحساب: ${session.id}\n` +
-        `📊 الحالة: ${session.status}\n` +
-        `⏰ تاريخ الربط: ${session.connectedAt || '—'}`,
-      {
-        reply_markup: {
-          inline_keyboard: [
-            [
-              {
-                text: '❌ حذف الحساب',
-                callback_data: `delete_session:${session.id}`
-              }
-            ]
-          ]
-        }
-      }
-    );
+  if (!client.__initialized) {
+    client.__initialized = true;
+    await client.initialize();
   }
 }
 
-async function deleteWhatsAppSession(bot, chatId, sessionId) {
-  const client = whatsappManager.getClient(sessionId);
-  if (client) await client.destroy();
-
-  await WhatsAppSession.destroy({ where: { id: sessionId } });
-
-  const sessionPath = path.join(process.cwd(), 'sessions', sessionId);
-  if (fs.existsSync(sessionPath)) {
-    fs.rmSync(sessionPath, { recursive: true, force: true });
-  }
-
-  await bot.sendMessage(chatId, '🗑️ تم حذف حساب واتساب بنجاح');
+function logoutWhatsApp(bot, chatId) {
+  destroyClient();
+  accountService.setDisconnected();
+  bot.sendMessage(chatId, '🚪 تم تسجيل الخروج من واتساب');
 }
 
 module.exports = {
-  createWhatsAppSession,
-  listWhatsAppSessions,
-  deleteWhatsAppSession
+  startWhatsAppSession,
+  logoutWhatsApp
 };
