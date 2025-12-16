@@ -1,4 +1,4 @@
-طconst { mainKeyboard } = require('./keyboards');
+const { mainKeyboard } = require('./keyboards');
 const { setState, getState, clearState } = require('./states');
 
 /* WhatsApp */
@@ -6,6 +6,7 @@ const {
   startWhatsAppSession,
   logoutWhatsApp
 } = require('../whatsapp/session');
+
 const accountService = require('../../services/whatsappAccountService');
 const collector = require('../whatsapp/collector');
 const { startPosting, stopPosting } = require('../whatsapp/poster');
@@ -34,7 +35,7 @@ async function handleMessage(bot, msg) {
   if (state?.state === 'WAIT_AD_TEXT') {
     adService.setAd(text);
     clearState(userId);
-    bot.sendMessage(chatId, '✅ تم حفظ الإعلان بنجاح');
+    await bot.sendMessage(chatId, '✅ تم حفظ الإعلان بنجاح');
     return;
   }
 
@@ -42,7 +43,7 @@ async function handleMessage(bot, msg) {
   if (state?.state === 'WAIT_PRIVATE_REPLY') {
     replyService.setPrivateReply(text);
     clearState(userId);
-    bot.sendMessage(chatId, '✅ تم حفظ رد الخاص');
+    await bot.sendMessage(chatId, '✅ تم حفظ رد الخاص');
     return;
   }
 
@@ -50,7 +51,7 @@ async function handleMessage(bot, msg) {
   if (state?.state === 'WAIT_GROUP_REPLY') {
     replyService.setGroupReply(text);
     clearState(userId);
-    bot.sendMessage(chatId, '✅ تم حفظ رد القروبات');
+    await bot.sendMessage(chatId, '✅ تم حفظ رد القروبات');
     return;
   }
 
@@ -63,7 +64,7 @@ async function handleMessage(bot, msg) {
     clearState(userId);
 
     if (!links.length) {
-      bot.sendMessage(chatId, '❌ لم يتم العثور على روابط مجموعات واتساب');
+      await bot.sendMessage(chatId, '❌ لم يتم العثور على روابط مجموعات واتساب');
       return;
     }
 
@@ -78,7 +79,7 @@ async function handleMessage(bot, msg) {
   switch (text) {
     case '/start':
       clearState(userId);
-      bot.sendMessage(
+      await bot.sendMessage(
         chatId,
         '👋 أهلاً بك في بوت إدارة واتساب\nاختر من القائمة:',
         mainKeyboard()
@@ -89,7 +90,7 @@ async function handleMessage(bot, msg) {
 
     case '🔗 ربط حساب واتساب':
       if (accountService.isConnected()) {
-        bot.sendMessage(chatId, '✅ واتساب مرتبط بالفعل');
+        await bot.sendMessage(chatId, '✅ واتساب مرتبط بالفعل');
         return;
       }
       startWhatsAppSession(bot, chatId);
@@ -107,7 +108,7 @@ async function handleMessage(bot, msg) {
         msgText += '❌ غير مرتبط';
       }
 
-      bot.sendMessage(chatId, msgText);
+      await bot.sendMessage(chatId, msgText);
       break;
     }
 
@@ -119,26 +120,26 @@ async function handleMessage(bot, msg) {
 
     case '🔍 تجميع الروابط':
       if (!accountService.isConnected()) {
-        bot.sendMessage(chatId, '❌ اربط واتساب أولاً');
+        await bot.sendMessage(chatId, '❌ اربط واتساب أولاً');
         return;
       }
       collector.startCollecting();
-      bot.sendMessage(chatId, '🔍 تم تشغيل تجميع الروابط');
+      await bot.sendMessage(chatId, '🔍 تم تشغيل تجميع الروابط');
       break;
 
     case '⛔ توقيف الجمع':
       collector.stopCollecting();
-      bot.sendMessage(chatId, '⛔ تم إيقاف تجميع الروابط');
+      await bot.sendMessage(chatId, '⛔ تم إيقاف تجميع الروابط');
       break;
 
     case '📂 عرض الروابط المجمعة': {
       const all = linkService.getAll();
-      bot.sendMessage(
+      await bot.sendMessage(
         chatId,
         `📂 الروابط المجمعة:\n\n` +
-        `🔗 واتساب: ${all.whatsapp.length}\n` +
-        `📨 تيليجرام: ${all.telegram.length}\n` +
-        `🌐 أخرى: ${all.other.length}`
+          `🔗 واتساب: ${all.whatsapp.length}\n` +
+          `📨 تيليجرام: ${all.telegram.length}\n` +
+          `🌐 أخرى: ${all.other.length}`
       );
       break;
     }
@@ -146,7 +147,7 @@ async function handleMessage(bot, msg) {
     case '📤 تصدير الروابط المجمعة': {
       const files = exportLinks();
       if (!files.length) {
-        bot.sendMessage(chatId, '❌ لا توجد روابط للتصدير');
+        await bot.sendMessage(chatId, '❌ لا توجد روابط للتصدير');
         return;
       }
       for (const f of files) {
@@ -159,7 +160,7 @@ async function handleMessage(bot, msg) {
 
     case '📣 نشر تلقائي':
       setState(userId, 'WAIT_AD_TEXT');
-      bot.sendMessage(chatId, '✏️ أرسل نص الإعلان الآن');
+      await bot.sendMessage(chatId, '✏️ أرسل نص الإعلان الآن');
       break;
 
     case '🛑 إيقاف النشر التلقائي':
@@ -169,49 +170,49 @@ async function handleMessage(bot, msg) {
     /* ===== Replies ===== */
 
     case '💬 الردود':
-      bot.sendMessage(
+      await bot.sendMessage(
         chatId,
         'اختر:\n\n' +
-        '✉️ رد الخاص\n' +
-        '👥 رد القروبات\n' +
-        '⛔ إيقاف رد الخاص\n' +
-        '⛔ إيقاف رد القروبات'
+          '✉️ رد الخاص\n' +
+          '👥 رد القروبات\n' +
+          '⛔ إيقاف رد الخاص\n' +
+          '⛔ إيقاف رد القروبات'
       );
       break;
 
     case '✉️ رد الخاص':
       setState(userId, 'WAIT_PRIVATE_REPLY');
-      bot.sendMessage(chatId, '✏️ أرسل نص رد الخاص');
+      await bot.sendMessage(chatId, '✏️ أرسل نص رد الخاص');
       break;
 
     case '👥 رد القروبات':
       setState(userId, 'WAIT_GROUP_REPLY');
-      bot.sendMessage(chatId, '✏️ أرسل نص رد القروبات');
+      await bot.sendMessage(chatId, '✏️ أرسل نص رد القروبات');
       break;
 
     case '⛔ إيقاف رد الخاص':
       replyService.disablePrivateReply();
-      bot.sendMessage(chatId, '⛔ تم إيقاف رد الخاص');
+      await bot.sendMessage(chatId, '⛔ تم إيقاف رد الخاص');
       break;
 
     case '⛔ إيقاف رد القروبات':
       replyService.disableGroupReply();
-      bot.sendMessage(chatId, '⛔ تم إيقاف رد القروبات');
+      await bot.sendMessage(chatId, '⛔ تم إيقاف رد القروبات');
       break;
 
     /* ===== Join Groups ===== */
 
     case '➕ الانضمام إلى المجموعات':
       if (!accountService.isConnected()) {
-        bot.sendMessage(chatId, '❌ اربط واتساب أولاً');
+        await bot.sendMessage(chatId, '❌ اربط واتساب أولاً');
         return;
       }
       setState(userId, 'WAIT_GROUP_LINKS');
-      bot.sendMessage(chatId, '🔗 أرسل روابط مجموعات واتساب');
+      await bot.sendMessage(chatId, '🔗 أرسل روابط مجموعات واتساب');
       break;
 
     default:
-      bot.sendMessage(chatId, '❓ استخدم الأزرار المتاحة');
+      await bot.sendMessage(chatId, '❓ استخدم الأزرار المتاحة');
   }
 }
 
