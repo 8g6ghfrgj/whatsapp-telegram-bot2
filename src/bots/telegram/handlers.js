@@ -1,119 +1,220 @@
-/**
- * Telegram Callback Handlers
- * Complete version (Stages 5 → 9)
- */
+طconst { mainKeyboard } = require('./keyboards');
+const { setState, getState, clearState } = require('./states');
 
+/* WhatsApp */
 const {
-  createWhatsAppSession,
-  listWhatsAppSessions,
-  deleteWhatsAppSession
+  startWhatsAppSession,
+  logoutWhatsApp
 } = require('../whatsapp/session');
+const accountService = require('../../services/whatsappAccountService');
+const collector = require('../whatsapp/collector');
+const { startPosting, stopPosting } = require('../whatsapp/poster');
+const { startJoining } = require('../whatsapp/joiner');
 
-const whatsappManager = require('../whatsapp/manager');
-const { CollectedLink } = require('../../models');
+/* Services */
+const linkService = require('../../services/linkService');
+const { exportLinks } = require('../../services/exportService');
+const adService = require('../../services/adService');
+const replyService = require('../../services/replyService');
 
-const {
-  startAutoPost,
-  stopAutoPost
-} = require('../../services/autoPostService');
+/* Utils */
+const isWhatsAppGroupLink = require('../../utils/isWhatsAppGroupLink');
 
-const { startJoinQueue } = require('../../services/autoJoinService');
-const {
-  setUserState
-} = require('./states');
+async function handleMessage(bot, msg) {
+  const chatId = msg.chat.id;
+  const userId = msg.from.id;
+  const text = msg.text?.trim();
+  const state = getState(userId);
 
-async function handleCallbacks(bot, query) {
-  const chatId = query.message.chat.id;
-  const telegramId = query.from.id.toString();
-  const action = query.data;
+  /* =========================
+     STATES HANDLING
+  ==========================*/
 
-  // ✅ حل مشكلة callback expired
-  try {
-    await bot.answerCallbackQuery(query.id);
-  } catch (err) {
-    // تجاهل الخطأ إذا كان الزر قديم أو انتهت صلاحيته
+  // إضافة إعلان
+  if (state?.state === 'WAIT_AD_TEXT') {
+    adService.setAd(text);
+    clearState(userId);
+    bot.sendMessage(chatId, '✅ تم حفظ الإعلان بنجاح');
+    return;
   }
 
-  // ===============================
-  // WhatsApp Sessions
-  // ===============================
-  if (action === 'add_account') {
-    return createWhatsAppSession(bot, chatId, telegramId);
+  // رد الخاص
+  if (state?.state === 'WAIT_PRIVATE_REPLY') {
+    replyService.setPrivateReply(text);
+    clearState(userId);
+    bot.sendMessage(chatId, '✅ تم حفظ رد الخاص');
+    return;
   }
 
-  if (action === 'list_accounts') {
-    return listWhatsAppSessions(bot, chatId, telegramId);
+  // رد القروبات
+  if (state?.state === 'WAIT_GROUP_REPLY') {
+    replyService.setGroupReply(text);
+    clearState(userId);
+    bot.sendMessage(chatId, '✅ تم حفظ رد القروبات');
+    return;
   }
 
-  if (action.startsWith('delete_session:')) {
-    const sessionId = action.split(':')[1];
-    return deleteWhatsAppSession(bot, chatId, sessionId);
-  }
+  // استقبال روابط مجموعات واتساب
+  if (state?.state === 'WAIT_GROUP_LINKS') {
+    const links = text
+      .split(/\s+/)
+      .filter(isWhatsAppGroupLink);
 
-  // ===============================
-  // Auto Post (Stage 8)
-  // ===============================
-  if (action === 'start_autopost') {
-    const clients = [...whatsappManager.clients.values()];
-    if (!clients.length) {
-      return bot.sendMessage(chatId, '❌ لا يوجد حساب واتساب مرتبط');
-    }
-
-    return startAutoPost({
-      bot,
-      chatId,
-      telegramId,
-      waClient: clients[0]
-    });
-  }
-
-  if (action === 'stop_autopost') {
-    return stopAutoPost(bot, chatId, telegramId);
-  }
-
-  // ===============================
-  // Auto Join (Stage 9)
-  // ===============================
-  if (action === 'join_groups') {
-    setUserState(telegramId, 'awaiting_join_links');
-    return bot.sendMessage(
-      chatId,
-      '🔗 أرسل روابط مجموعات واتساب (يمكنك إرسال عدد كبير في رسالة واحدة)'
-    );
-  }
-
-  // ===============================
-  // Collected Links (Stage 6)
-  // ===============================
-  if (action === 'show_links') {
-    const links = await CollectedLink.findAll({
-      order: [['createdAt', 'DESC']],
-      limit: 20
-    });
+    clearState(userId);
 
     if (!links.length) {
-      return bot.sendMessage(chatId, '📂 لا توجد روابط مجمعة');
+      bot.sendMessage(chatId, '❌ لم يتم العثور على روابط مجموعات واتساب');
+      return;
     }
 
-    let message = '📂 آخر الروابط المجمعة:\n\n';
-
-    for (const link of links) {
-      let icon = '🌐';
-      if (link.type === 'whatsapp') icon = '🟢';
-      if (link.type === 'telegram') icon = '🔵';
-
-      message += `${icon} ${link.url}\n📌 النوع: ${link.type}\n\n`;
-    }
-
-    return bot.sendMessage(chatId, message);
+    startJoining(bot, chatId, links);
+    return;
   }
 
-  // ===============================
-  // Default
-  // ===============================
-  return bot.sendMessage(chatId, '⚙️ هذه الميزة سيتم تفعيلها لاحقاً');
+  /* =========================
+     COMMANDS
+  ==========================*/
+
+  switch (text) {
+    case '/start':
+      clearState(userId);
+      bot.sendMessage(
+        chatId,
+        '👋 أهلاً بك في بوت إدارة واتساب\nاختر من القائمة:',
+        mainKeyboard()
+      );
+      break;
+
+    /* ===== WhatsApp ===== */
+
+    case '🔗 ربط حساب واتساب':
+      if (accountService.isConnected()) {
+        bot.sendMessage(chatId, '✅ واتساب مرتبط بالفعل');
+        return;
+      }
+      startWhatsAppSession(bot, chatId);
+      break;
+
+    case '📱 عرض الحسابات المرتبطة': {
+      const status = accountService.getStatus();
+      let msgText = '📱 حالة واتساب:\n\n';
+
+      if (status.status === 'connected') {
+        msgText += `✅ متصل\n⏰ منذ: ${status.connectedAt.toLocaleString()}`;
+      } else if (status.status === 'pending') {
+        msgText += '⏳ جاري الربط...';
+      } else {
+        msgText += '❌ غير مرتبط';
+      }
+
+      bot.sendMessage(chatId, msgText);
+      break;
+    }
+
+    case '🚪 تسجيل خروج واتساب':
+      logoutWhatsApp(bot, chatId);
+      break;
+
+    /* ===== Link Collection ===== */
+
+    case '🔍 تجميع الروابط':
+      if (!accountService.isConnected()) {
+        bot.sendMessage(chatId, '❌ اربط واتساب أولاً');
+        return;
+      }
+      collector.startCollecting();
+      bot.sendMessage(chatId, '🔍 تم تشغيل تجميع الروابط');
+      break;
+
+    case '⛔ توقيف الجمع':
+      collector.stopCollecting();
+      bot.sendMessage(chatId, '⛔ تم إيقاف تجميع الروابط');
+      break;
+
+    case '📂 عرض الروابط المجمعة': {
+      const all = linkService.getAll();
+      bot.sendMessage(
+        chatId,
+        `📂 الروابط المجمعة:\n\n` +
+        `🔗 واتساب: ${all.whatsapp.length}\n` +
+        `📨 تيليجرام: ${all.telegram.length}\n` +
+        `🌐 أخرى: ${all.other.length}`
+      );
+      break;
+    }
+
+    case '📤 تصدير الروابط المجمعة': {
+      const files = exportLinks();
+      if (!files.length) {
+        bot.sendMessage(chatId, '❌ لا توجد روابط للتصدير');
+        return;
+      }
+      for (const f of files) {
+        await bot.sendDocument(chatId, f.filePath);
+      }
+      break;
+    }
+
+    /* ===== Posting ===== */
+
+    case '📣 نشر تلقائي':
+      setState(userId, 'WAIT_AD_TEXT');
+      bot.sendMessage(chatId, '✏️ أرسل نص الإعلان الآن');
+      break;
+
+    case '🛑 إيقاف النشر التلقائي':
+      stopPosting(bot, chatId);
+      break;
+
+    /* ===== Replies ===== */
+
+    case '💬 الردود':
+      bot.sendMessage(
+        chatId,
+        'اختر:\n\n' +
+        '✉️ رد الخاص\n' +
+        '👥 رد القروبات\n' +
+        '⛔ إيقاف رد الخاص\n' +
+        '⛔ إيقاف رد القروبات'
+      );
+      break;
+
+    case '✉️ رد الخاص':
+      setState(userId, 'WAIT_PRIVATE_REPLY');
+      bot.sendMessage(chatId, '✏️ أرسل نص رد الخاص');
+      break;
+
+    case '👥 رد القروبات':
+      setState(userId, 'WAIT_GROUP_REPLY');
+      bot.sendMessage(chatId, '✏️ أرسل نص رد القروبات');
+      break;
+
+    case '⛔ إيقاف رد الخاص':
+      replyService.disablePrivateReply();
+      bot.sendMessage(chatId, '⛔ تم إيقاف رد الخاص');
+      break;
+
+    case '⛔ إيقاف رد القروبات':
+      replyService.disableGroupReply();
+      bot.sendMessage(chatId, '⛔ تم إيقاف رد القروبات');
+      break;
+
+    /* ===== Join Groups ===== */
+
+    case '➕ الانضمام إلى المجموعات':
+      if (!accountService.isConnected()) {
+        bot.sendMessage(chatId, '❌ اربط واتساب أولاً');
+        return;
+      }
+      setState(userId, 'WAIT_GROUP_LINKS');
+      bot.sendMessage(chatId, '🔗 أرسل روابط مجموعات واتساب');
+      break;
+
+    default:
+      bot.sendMessage(chatId, '❓ استخدم الأزرار المتاحة');
+  }
 }
 
 module.exports = {
-  handleCallbacks
+  handleMessage
 };
