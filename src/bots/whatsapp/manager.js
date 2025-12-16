@@ -1,51 +1,40 @@
 const { Client, LocalAuth } = require('whatsapp-web.js');
 
-const clients = new Map();
+let client = null;
 
-function createClient(sessionId) {
-  if (clients.has(sessionId)) {
-    return clients.get(sessionId);
-  }
+function createClient() {
+  if (client) return client;
 
-  const client = new Client({
+  client = new Client({
     authStrategy: new LocalAuth({
-      clientId: sessionId,
+      clientId: 'main',
       dataPath: 'sessions'
     }),
     puppeteer: {
       executablePath:
         process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium-browser',
-      headless: true,
+      headless: 'new',
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
         '--disable-dev-shm-usage',
         '--disable-gpu',
         '--no-first-run',
-        '--no-zygote',
-        '--single-process'
+        '--no-zygote'
       ]
     }
   });
 
-  clients.set(sessionId, client);
   return client;
 }
 
-function getClient(sessionId) {
-  return clients.get(sessionId);
-}
-
-function removeClient(sessionId) {
-  const client = clients.get(sessionId);
-  if (client) {
-    client.destroy();
-    clients.delete(sessionId);
-  }
+function destroyClient() {
+  if (!client) return;
+  client.destroy();
+  client = null;
 }
 
 module.exports = {
   createClient,
-  getClient,
-  removeClient
+  destroyClient
 };
