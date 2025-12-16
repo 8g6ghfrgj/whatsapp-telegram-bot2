@@ -1,15 +1,7 @@
-/**
- * WhatsApp QR Generator
- */
-
 const QRCode = require('qrcode');
 
-async function generateQRImage(qrString) {
-  return QRCode.toBuffer(qrString, {
-    type: 'png',
-    width: 400,
-    margin: 2
-  });
+async function generateQRImage(qr) {
+  return QRCode.toBuffer(qr);
 }
 
 module.exports = {
