@@ -1,51 +1,123 @@
-const { Client, LocalAuth } = require('whatsapp-web.js');
+/**
+ * WhatsApp Session Controller
+ * Final Stable Version
+ */
 
-const clients = new Map();
+const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
+const whatsappManager = require('./manager');
+const { generateQRImage } = require('./qr');
+const { WhatsAppSession } = require('../../models');
 
-function createClient(sessionId) {
-  if (clients.has(sessionId)) {
-    return clients.get(sessionId);
-  }
-
-  const client = new Client({
-    authStrategy: new LocalAuth({
-      clientId: sessionId,
-      dataPath: 'sessions'
-    }),
-    puppeteer: {
-      executablePath:
-        process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium-browser',
-      headless: true,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-gpu',
-        '--no-first-run',
-        '--no-zygote',
-        '--single-process'
-      ]
-    }
+async function createWhatsAppSession(bot, chatId, telegramId) {
+  // منع تكرار جلسة pending
+  const existing = await WhatsAppSession.findOne({
+    where: { adminTelegramId: telegramId, status: 'pending' }
   });
 
-  clients.set(sessionId, client);
-  return client;
-}
-
-function getClient(sessionId) {
-  return clients.get(sessionId);
-}
-
-function removeClient(sessionId) {
-  const client = clients.get(sessionId);
-  if (client) {
-    client.destroy();
-    clients.delete(sessionId);
+  if (existing) {
+    return bot.sendMessage(
+      chatId,
+      '⏳ لديك عملية ربط قيد التنفيذ.\nالرجاء إكمال الربط أو الانتظار.'
+    );
   }
+
+  const sessionId = `wa_${crypto.randomBytes(6).toString('hex')}`;
+  const client = whatsappManager.createClient(sessionId);
+
+  let sessionCreated = false;
+
+  client.on('qr', async (qr) => {
+    // إنشاء الجلسة فقط عند ظهور QR فعليًا
+    if (!sessionCreated) {
+      await WhatsAppSession.create({
+        id: sessionId,
+        adminTelegramId: telegramId,
+        status: 'pending'
+      });
+      sessionCreated = true;
+    }
+
+    const qrImage = await generateQRImage(qr);
+    await bot.sendPhoto(chatId, qrImage, {
+      caption:
+        '📱 امسح QR من واتساب\n' +
+        'الإعدادات → الأجهزة المرتبطة → ربط جهاز'
+    });
+  });
+
+  client.on('ready', async () => {
+    await WhatsAppSession.update(
+      { status: 'connected', connectedAt: new Date() },
+      { where: { id: sessionId } }
+    );
+
+    await bot.sendMessage(chatId, '✅ تم ربط حساب واتساب بنجاح');
+  });
+
+  client.on('auth_failure', async () => {
+    await WhatsAppSession.destroy({ where: { id: sessionId } });
+    await bot.sendMessage(chatId, '❌ فشل ربط حساب واتساب');
+  });
+
+  client.on('disconnected', async () => {
+    await WhatsAppSession.update(
+      { status: 'disconnected' },
+      { where: { id: sessionId } }
+    );
+  });
+
+  await client.initialize();
+}
+
+async function listWhatsAppSessions(bot, chatId, telegramId) {
+  const sessions = await WhatsAppSession.findAll({
+    where: { adminTelegramId: telegramId }
+  });
+
+  if (!sessions.length) {
+    return bot.sendMessage(chatId, '📱 لا توجد حسابات مرتبطة');
+  }
+
+  for (const session of sessions) {
+    await bot.sendMessage(
+      chatId,
+      `📱 الحساب: ${session.id}\n` +
+        `📊 الحالة: ${session.status}\n` +
+        `⏰ تاريخ الربط: ${session.connectedAt || '—'}`,
+      {
+        reply_markup: {
+          inline_keyboard: [
+            [
+              {
+                text: '❌ حذف الحساب',
+                callback_data: `delete_session:${session.id}`
+              }
+            ]
+          ]
+        }
+      }
+    );
+  }
+}
+
+async function deleteWhatsAppSession(bot, chatId, sessionId) {
+  const client = whatsappManager.getClient(sessionId);
+  if (client) await client.destroy();
+
+  await WhatsAppSession.destroy({ where: { id: sessionId } });
+
+  const sessionPath = path.join(process.cwd(), 'sessions', sessionId);
+  if (fs.existsSync(sessionPath)) {
+    fs.rmSync(sessionPath, { recursive: true, force: true });
+  }
+
+  await bot.sendMessage(chatId, '🗑️ تم حذف حساب واتساب بنجاح');
 }
 
 module.exports = {
-  createClient,
-  getClient,
-  removeClient
+  createWhatsAppSession,
+  listWhatsAppSessions,
+  deleteWhatsAppSession
 };
