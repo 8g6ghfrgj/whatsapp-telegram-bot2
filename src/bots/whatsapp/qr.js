@@ -1,4 +1,4 @@
-cat > src/bots/whatsapp/qr.js << 'EOF'
+cat << 'EOF' > src/bots/whatsapp/qr.js
 const QRCode = require('qrcode');
 
 async function generateQR(qrText) {
