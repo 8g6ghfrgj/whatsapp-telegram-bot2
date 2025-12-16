@@ -1,32 +1,24 @@
-/**
- * User States (FSM)
- */
+const states = new Map();
 
-const userStates = new Map();
+/*
+  مثال:
+  states.set(userId, { state: 'WAIT_AD_TEXT' })
+*/
 
-function initStates() {
-  userStates.clear();
+function setState(userId, state, data = {}) {
+  states.set(userId, { state, data });
 }
 
-function setUserState(userId, state, data = {}) {
-  userStates.set(userId, {
-    state,
-    data,
-    updatedAt: Date.now()
-  });
+function getState(userId) {
+  return states.get(userId) || null;
 }
 
-function getUserState(userId) {
-  return userStates.get(userId) || null;
-}
-
-function clearUserState(userId) {
-  userStates.delete(userId);
+function clearState(userId) {
+  states.delete(userId);
 }
 
 module.exports = {
-  initStates,
-  setUserState,
-  getUserState,
-  clearUserState
+  setState,
+  getState,
+  clearState
 };
