@@ -1,14 +1,4 @@
-# Node
 node_modules/
-
-# Environment variables
-.env
-
-# Runtime generated folders
 sessions/
-database/
-logs/
-
-# OS files
-.DS_Store
-Thumbs.db
+exports/
+.env
