@@ -1,38 +1,51 @@
 const { Client, LocalAuth } = require('whatsapp-web.js');
-const path = require('path');
 
-class WhatsAppManager {
-  constructor() {
-    this.clients = new Map();
+const clients = new Map();
+
+function createClient(sessionId) {
+  if (clients.has(sessionId)) {
+    return clients.get(sessionId);
   }
 
-  createClient(sessionId) {
-    if (this.clients.has(sessionId)) {
-      return this.clients.get(sessionId);
+  const client = new Client({
+    authStrategy: new LocalAuth({
+      clientId: sessionId,
+      dataPath: 'sessions'
+    }),
+    puppeteer: {
+      executablePath:
+        process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium-browser',
+      headless: true,
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+        '--no-first-run',
+        '--no-zygote',
+        '--single-process'
+      ]
     }
+  });
 
-    const client = new Client({
-      authStrategy: new LocalAuth({
-        clientId: sessionId,
-        dataPath: path.join(process.cwd(), 'sessions')
-      }),
-      puppeteer: {
-        headless: true,
-        args: [
-          '--no-sandbox',
-          '--disable-setuid-sandbox',
-          '--disable-dev-shm-usage'
-        ]
-      }
-    });
+  clients.set(sessionId, client);
+  return client;
+}
 
-    this.clients.set(sessionId, client);
-    return client;
-  }
+function getClient(sessionId) {
+  return clients.get(sessionId);
+}
 
-  getClient(sessionId) {
-    return this.clients.get(sessionId);
+function removeClient(sessionId) {
+  const client = clients.get(sessionId);
+  if (client) {
+    client.destroy();
+    clients.delete(sessionId);
   }
 }
 
-module.exports = new WhatsAppManager();
+module.exports = {
+  createClient,
+  getClient,
+  removeClient
+};
