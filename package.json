@@ -1,20 +1,18 @@
 {
-  "name": "whatsapp-telegram-bot",
+  "name": "whatsapp-multi-device-automation-bot",
   "version": "1.0.0",
-  "description": "Telegram bot connected to WhatsApp Web (Linked Device)",
-  "main": "src/index.js",
+  "description": "WhatsApp Multi-Device automation bot with Telegram control panel",
+  "main": "index.js",
   "type": "commonjs",
   "scripts": {
-    "start": "node src/index.js",
-    "dev": "NODE_ENV=development node src/index.js"
+    "start": "node index.js"
   },
-  "engines": {
-    "node": ">=18.0.0"
-  },
+  "author": "Mohammed",
+  "license": "MIT",
   "dependencies": {
+    "@whiskeysockets/baileys": "^6.7.9",
     "dotenv": "^16.4.5",
-    "node-telegram-bot-api": "^0.66.0",
-    "qrcode": "^1.5.4",
-    "whatsapp-web.js": "^1.26.0"
+    "sqlite3": "^5.1.7",
+    "node-telegram-bot-api": "^0.66.0"
   }
 }
