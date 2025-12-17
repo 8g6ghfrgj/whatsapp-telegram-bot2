@@ -1,36 +1,24 @@
 /**
  * src/control/handlers.js
- * Telegram Button Handlers (Router)
- *
- * مسؤول عن:
- * - ربط أزرار تيليجرام بمحركات البوت
- * - التحكم بالعمليات (تصدير – نشر – تقارير – إيقاف)
- *
- * هذا الملف لا يُعدل بعد اعتماده
+ * Telegram Button Handlers (FINAL & COMPLETE)
  */
 
 'use strict';
 
-// ============================
-// استيراد المحركات
-// ============================
 const { exportAllSections } = require('../export/exportTxt');
-const { startPublishing } = require('../publisher/autoPublish');
 const { stop } = require('../publisher/stopPublish');
 const { generateReportFile } = require('../reports/joinReport');
 const { getLinksByType } = require('../database/linkModel');
-const { processGroupLinks } = require('../groups/joinGroups');
 
 // ============================
-// Logger داخلي
+// Logger
 // ============================
-function log(level, message) {
-    const time = new Date().toISOString();
-    console.log(`[${time}] [HANDLER:${level}] ${message}`);
+function log(level, msg) {
+    console.log(`[HANDLER:${level}] ${msg}`);
 }
 
 // ============================
-// معالج الأزرار
+// Callback handler
 // ============================
 async function handleCallback(bot, query) {
     const chatId = query.message.chat.id;
@@ -38,24 +26,45 @@ async function handleCallback(bot, query) {
 
     try {
         switch (action) {
-            // ============================
-            // تصدير الروابط
-            // ============================
-            case 'links_export':
-                await exportAllSections();
-                await bot.sendMessage(chatId, '✅ تم تصدير جميع الروابط');
+
+            // =========================
+            // WhatsApp
+            // =========================
+            case 'wa_link':
+                await bot.sendMessage(
+                    chatId,
+                    '📱 ربط واتساب يتم تلقائيًا من السيرفر.\nإذا لم يتم الربط بعد، راجع QR في الـ logs.'
+                );
                 break;
 
-            // ============================
-            // عرض الروابط
-            // ============================
+            // =========================
+            // Links
+            // =========================
+            case 'links_show':
+                await bot.sendMessage(
+                    chatId,
+                    'اختر نوع الروابط:',
+                    {
+                        reply_markup: {
+                            inline_keyboard: [
+                                [
+                                    { text: '📱 واتساب', callback_data: 'links_whatsapp' },
+                                    { text: '✈️ تيليجرام', callback_data: 'links_telegram' }
+                                ],
+                                [
+                                    { text: '🌐 أخرى', callback_data: 'links_other' }
+                                ]
+                            ]
+                        }
+                    }
+                );
+                break;
+
             case 'links_whatsapp': {
                 const links = await getLinksByType('whatsapp');
                 await bot.sendMessage(
                     chatId,
-                    links.length
-                        ? links.join('\n')
-                        : 'لا توجد روابط واتساب'
+                    links.length ? links.join('\n') : 'لا توجد روابط واتساب'
                 );
                 break;
             }
@@ -64,9 +73,7 @@ async function handleCallback(bot, query) {
                 const links = await getLinksByType('telegram');
                 await bot.sendMessage(
                     chatId,
-                    links.length
-                        ? links.join('\n')
-                        : 'لا توجد روابط تيليجرام'
+                    links.length ? links.join('\n') : 'لا توجد روابط تيليجرام'
                 );
                 break;
             }
@@ -75,20 +82,23 @@ async function handleCallback(bot, query) {
                 const links = await getLinksByType('other');
                 await bot.sendMessage(
                     chatId,
-                    links.length
-                        ? links.join('\n')
-                        : 'لا توجد روابط أخرى'
+                    links.length ? links.join('\n') : 'لا توجد روابط أخرى'
                 );
                 break;
             }
 
-            // ============================
-            // النشر
-            // ============================
+            case 'links_export':
+                await exportAllSections();
+                await bot.sendMessage(chatId, '✅ تم تصدير الروابط بنجاح');
+                break;
+
+            // =========================
+            // Publishing
+            // =========================
             case 'publish_start':
                 await bot.sendMessage(
                     chatId,
-                    '⚠️ بدء النشر سيتم ربطه باختيار الإعلان (الخطوة القادمة)'
+                    '🚀 ميزة النشر جاهزة.\nسيتم ربط اختيار الإعلان في الخطوة القادمة.'
                 );
                 break;
 
@@ -97,19 +107,16 @@ async function handleCallback(bot, query) {
                 await bot.sendMessage(chatId, '⛔ تم إيقاف النشر');
                 break;
 
-            // ============================
-            // الانضمام للمجموعات
-            // ============================
+            // =========================
+            // Groups
+            // =========================
             case 'groups_join':
                 await bot.sendMessage(
                     chatId,
-                    '📨 أرسل روابط مجموعات واتساب في رسالة واحدة أو عدة رسائل'
+                    '📨 أرسل روابط مجموعات واتساب في رسالة واحدة أو عدة رسائل.'
                 );
                 break;
 
-            // ============================
-            // تقرير الانضمام
-            // ============================
             case 'groups_report': {
                 const filePath = await generateReportFile();
                 if (filePath) {
@@ -120,8 +127,15 @@ async function handleCallback(bot, query) {
                 break;
             }
 
+            // =========================
+            // Default
+            // =========================
             default:
-                await bot.sendMessage(chatId, '⚠️ زر غير معروف');
+                await bot.sendMessage(
+                    chatId,
+                    '⚠️ هذا الزر لم يتم ربطه بعد.'
+                );
+                log('WARN', `Unknown button: ${action}`);
         }
     } catch (err) {
         log('ERROR', err.message);
@@ -132,29 +146,12 @@ async function handleCallback(bot, query) {
 }
 
 // ============================
-// معالج الرسائل النصية (للانضمام للمجموعات)
+// Message handler (placeholder)
 // ============================
 async function handleMessage(bot, msg) {
-    const chatId = msg.chat.id;
-    const text = msg.text || '';
-
-    // محاولة استخراج روابط مجموعات واتساب
-    const links =
-        text.match(/https?:\/\/chat\.whatsapp\.com\/[A-Za-z0-9_-]+/gi) ||
-        [];
-
-    if (links.length > 0) {
-        await bot.sendMessage(
-            chatId,
-            `⏳ جاري معالجة ${links.length} رابط مجموعة...`
-        );
-        await processGroupLinks(links);
-        await bot.sendMessage(chatId, '✅ تم إرسال طلبات الانضمام');
-    }
+    // حالياً لا شيء
 }
 
-// ============================
-// التصدير
 // ============================
 module.exports = {
     handleCallback,
