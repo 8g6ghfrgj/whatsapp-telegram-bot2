@@ -1,4 +1,49 @@
+# =========================
+# Node.js
+# =========================
 node_modules/
-sessions/
-exports/
+npm-debug.log*
+yarn-error.log*
+pnpm-lock.yaml
+
+# =========================
+# Environment variables
+# =========================
 .env
+
+# =========================
+# WhatsApp sessions
+# =========================
+src/whatsapp/sessions/
+
+# =========================
+# Database
+# =========================
+src/database/data/
+*.sqlite
+*.sqlite3
+
+# =========================
+# Exports & Reports
+# =========================
+src/export/files/
+src/reports/files/
+
+# =========================
+# Logs & Process Managers
+# =========================
+logs/
+pids/
+*.log
+
+# =========================
+# OS files
+# =========================
+.DS_Store
+Thumbs.db
+
+# =========================
+# IDE / Editor
+# =========================
+.vscode/
+.idea/
