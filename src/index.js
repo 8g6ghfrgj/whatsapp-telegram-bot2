@@ -1,78 +1,82 @@
 /**
  * index.js
- * Core Entry Point
- * هذا الملف هو نقطة التشغيل الأساسية للبوت
+ * Main Entry Point (Final)
+ *
+ * هذا الملف هو نقطة التشغيل الوحيدة للمشروع
+ * يقوم بتحميل وتشغيل جميع الوحدات مرة واحدة
  * لا يتم تعديله بعد اعتماده
  */
 
 'use strict';
 
 // ============================
-// تحميل المتغيرات البيئية
+// تحميل متغيرات البيئة
 // ============================
 require('dotenv').config();
 
 // ============================
-// معلومات التطبيق
+// Logger مركزي
 // ============================
-const APP_INFO = {
-    name: 'WhatsApp Multi-Device Bot',
-    version: '1.0.0',
-    startedAt: new Date()
-};
-
-// ============================
-// Logger مركزي ثابت
-// ============================
-function logger(level, message) {
-    const timestamp = new Date().toISOString();
-    console.log(`[${timestamp}] [${level}] ${message}`);
+function log(level, message) {
+    const time = new Date().toISOString();
+    console.log(`[${time}] [CORE:${level}] ${message}`);
 }
 
 // ============================
-// حماية من أخطاء النظام
+// حماية من الأخطاء القاتلة
 // ============================
-process.on('uncaughtException', (error) => {
-    logger('FATAL', `Uncaught Exception: ${error.stack || error.message}`);
+process.on('uncaughtException', (err) => {
+    log('FATAL', err.stack || err.message);
 });
 
 process.on('unhandledRejection', (reason) => {
-    logger('FATAL', `Unhandled Rejection: ${reason}`);
+    log('FATAL', reason);
 });
 
 // ============================
 // تشغيل النواة
 // ============================
-async function startCore() {
-    logger('INFO', `${APP_INFO.name} v${APP_INFO.version} initializing`);
-    logger('INFO', `Boot time: ${APP_INFO.startedAt.toISOString()}`);
+async function bootstrap() {
+    log('INFO', 'Starting WhatsApp Multi-Device Automation Bot');
 
     // ============================
-    // تحميل وحدة واتساب (عند توفرها)
+    // 1️⃣ قاعدة البيانات
     // ============================
-    try {
-        const whatsappModule = require('./src/whatsapp/connect');
-
-        if (whatsappModule && typeof whatsappModule.init === 'function') {
-            await whatsappModule.init();
-            logger('INFO', 'WhatsApp module initialized successfully');
-        } else {
-            logger('WARN', 'WhatsApp module loaded but init() not available');
-        }
-    } catch (error) {
-        logger(
-            'WARN',
-            'WhatsApp module not available yet (expected in early stages)'
-        );
-    }
+    require('./src/database/db');
+    require('./src/database/linkModel');
 
     // ============================
-    // جاهزية النظام
+    // 2️⃣ واتساب (اتصال + أحداث + حماية)
     // ============================
-    logger('READY', 'Core system is running');
+    const whatsapp = require('./src/whatsapp/connect');
+    await whatsapp.init();
+
+    require('./src/whatsapp/events');
+    require('./src/whatsapp/connectionGuard');
+
+    // ============================
+    // 3️⃣ الجامع والردود
+    // ============================
+    require('./src/collectors/linkCollector');
+    require('./src/replies/autoReply');
+
+    // ============================
+    // 4️⃣ المجموعات والتقارير
+    // ============================
+    const groups = require('./src/groups/joinGroups');
+    groups.monitorPendingRequests();
+
+    require('./src/reports/joinReport');
+
+    // ============================
+    // 5️⃣ لوحة تحكم تيليجرام
+    // ============================
+    require('./src/control/telegramBot');
+
+    log('READY', 'All systems initialized successfully');
 }
 
 // ============================
-// بدء التنفيذ
+// بدء التشغيل
 // ============================
-startCore();
+bootstrap();
